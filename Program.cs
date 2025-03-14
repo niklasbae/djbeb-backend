@@ -1,7 +1,9 @@
 using djbeb;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ✅ Bind SpotifyConfig from appsettings.json
 builder.Services.Configure<SpotifyConfig>(
     builder.Configuration.GetSection("Spotify"));
 
@@ -11,6 +13,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// ✅ Add session handling
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
@@ -18,23 +21,27 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 
+// ✅ Fetch frontend URL from SpotifyConfig dynamically
+var frontendUrl = builder.Configuration.GetSection("Spotify")["FrontendUrl"] ?? "http://localhost:5173";
+
+// ✅ Add CORS policy
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
-            .AllowAnyMethod()
+        policy.WithOrigins(frontendUrl)
             .AllowAnyHeader()
-            .AllowCredentials(); // Important for cookies/session
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
 var app = builder.Build();
-// and after builder.Build()
+
+// ✅ Enable CORS only once
 app.UseCors();
 
 app.UseSession();
-app.UseCors();
 
 if (app.Environment.IsDevelopment())
 {
@@ -42,7 +49,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// temporarily remove or comment out HTTPS redirection for local testing
+// 🔹 Temporarily disable HTTPS redirection for local testing
 // app.UseHttpsRedirection();
 
 app.UseAuthorization();

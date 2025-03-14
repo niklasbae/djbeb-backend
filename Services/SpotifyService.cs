@@ -31,7 +31,6 @@ public class SpotifyService
                 Scopes.AppRemoteControl,
                 Scopes.UserReadEmail,
                 Scopes.UserReadPrivate
-                
             }
         };
         return loginRequest.ToUri().ToString();
@@ -46,22 +45,6 @@ public class SpotifyService
         );
     }
 
-    public async Task<SpotifyClient> GetClientByCode(string code)
-    {
-        var response = await new OAuthClient().RequestToken(
-            new AuthorizationCodeTokenRequest(
-                _config.ClientId, _config.ClientSecret, code, new Uri(_config.RedirectUri)
-            )
-        );
-
-        return new SpotifyClient(response.AccessToken);
-    }
-
-    public async Task<Paging<FullPlaylist>> GetUserPlaylists(SpotifyClient client)
-    {
-        return await client.Playlists.CurrentUsers();
-    }
-
     public async Task<string> GetPlaylistTracks(string playlistId, string accessToken)
     {
         using var httpClient = new HttpClient();
@@ -70,21 +53,13 @@ public class SpotifyService
 
         try
         {
-            // ✅ Set Authorization Header
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-            // ✅ Make GET Request
             var response = await httpClient.GetAsync(requestUrl);
             response.EnsureSuccessStatusCode();
-
-            // ✅ Read and Log Response
-            var jsonResponse = await response.Content.ReadAsStringAsync();
-
-            return jsonResponse;
+            return await response.Content.ReadAsStringAsync();
         }
         catch (Exception ex)
         {
-            // ✅ Log and Handle Errors
             Console.WriteLine($"❌ Error fetching playlist tracks: {ex.Message}");
             throw;
         }
@@ -94,11 +69,8 @@ public class SpotifyService
     {
         var request = new PlayerResumePlaybackRequest
         {
-            ContextUri = $"spotify:playlist:{playlistId}",  // ✅ Play the entire playlist
-            OffsetParam = new PlayerResumePlaybackRequest.Offset
-            {
-                Uri = $"spotify:track:{trackId}"  // ✅ Start at the selected track
-            },
+            ContextUri = $"spotify:playlist:{playlistId}",
+            OffsetParam = new PlayerResumePlaybackRequest.Offset { Uri = $"spotify:track:{trackId}" },
             DeviceId = deviceId
         };
 
@@ -110,5 +82,17 @@ public class SpotifyService
         await client.Player.PausePlayback();
     }
     
-    
+    public async Task<Paging<FullPlaylist>> GetUserPlaylists(SpotifyClient client)
+    {
+        try
+        {
+            var playlists = await client.Playlists.CurrentUsers();
+            return playlists;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error fetching user playlists: {ex.Message}");
+            throw;
+        }
+    }
 }

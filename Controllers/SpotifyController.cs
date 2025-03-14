@@ -36,9 +36,8 @@ public class SpotifyController : ControllerBase
     {
         var response = await _spotifyService.RequestToken(code);
 
-        var jwtSecret = _jwtConfig.Secret;
         var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.UTF8.GetBytes(jwtSecret!);
+        var key = Encoding.UTF8.GetBytes(_jwtConfig.Secret!);
 
         var tokenDescriptor = new SecurityTokenDescriptor
         {
@@ -61,9 +60,9 @@ public class SpotifyController : ControllerBase
     [HttpGet("playlists")]
     public async Task<IActionResult> GetPlaylists()
     {
-        var token = User.FindFirstValue("SpotifyToken");
+        var token = User.FindFirst("SpotifyToken")?.Value;
         if (string.IsNullOrEmpty(token))
-            return Unauthorized("❌ You must authenticate first.");
+            return Unauthorized("❌ JWT is missing SpotifyToken claim.");
 
         var spotifyClient = new SpotifyClient(token);
         var playlists = await _spotifyService.GetUserPlaylists(spotifyClient);
@@ -75,9 +74,9 @@ public class SpotifyController : ControllerBase
     [HttpGet("playlist/{playlistId}")]
     public async Task<IActionResult> GetPlaylistTracks(string playlistId)
     {
-        var token = User.FindFirstValue("SpotifyToken");
+        var token = User.FindFirst("SpotifyToken")?.Value;
         if (string.IsNullOrEmpty(token))
-            return Unauthorized("❌ Missing access token.");
+            return Unauthorized("❌ JWT is missing SpotifyToken claim.");
 
         var tracksJson = await _spotifyService.GetPlaylistTracks(playlistId, token);
         return Content(tracksJson, "application/json");
@@ -90,23 +89,23 @@ public class SpotifyController : ControllerBase
         if (string.IsNullOrEmpty(request.DeviceId) || string.IsNullOrEmpty(request.TrackId) || string.IsNullOrEmpty(request.PlaylistId))
             return BadRequest("❌ Missing trackId, deviceId, or playlistId");
 
-        var token = User.FindFirstValue("SpotifyToken");
+        var token = User.FindFirst("SpotifyToken")?.Value;
         if (string.IsNullOrEmpty(token))
-            return Unauthorized("❌ You must authenticate first.");
+            return Unauthorized("❌ JWT is missing SpotifyToken claim.");
 
         var spotifyClient = new SpotifyClient(token);
         await _spotifyService.PlayTrack(spotifyClient, request.TrackId, request.DeviceId, request.PlaylistId);
 
-        return Ok(new { message = "Track playing from playlist." });    
+        return Ok(new { message = "Track playing from playlist." });
     }
 
     [Authorize]
     [HttpPost("pause")]
     public async Task<IActionResult> PausePlayback()
     {
-        var token = User.FindFirstValue("SpotifyToken");
+        var token = User.FindFirst("SpotifyToken")?.Value;
         if (string.IsNullOrEmpty(token))
-            return Unauthorized("❌ You must authenticate first.");
+            return Unauthorized("❌ JWT is missing SpotifyToken claim.");
 
         var spotifyClient = new SpotifyClient(token);
         await _spotifyService.PausePlayback(spotifyClient);
@@ -118,12 +117,15 @@ public class SpotifyController : ControllerBase
     [HttpPost("resume")]
     public async Task<IActionResult> ResumePlayback([FromQuery] string device_id)
     {
-        var token = User.FindFirstValue("SpotifyToken");
+        var token = User.FindFirst("SpotifyToken")?.Value;
         if (string.IsNullOrEmpty(token))
-            return Unauthorized("❌ You must authenticate first.");
+            return Unauthorized("❌ JWT is missing SpotifyToken claim.");
 
         var spotifyClient = new SpotifyClient(token);
-        await spotifyClient.Player.ResumePlayback(new PlayerResumePlaybackRequest { DeviceId = device_id });
+        await spotifyClient.Player.ResumePlayback(new PlayerResumePlaybackRequest
+        {
+            DeviceId = device_id
+        });
 
         return Ok("✅ Playback resumed.");
     }
@@ -132,12 +134,15 @@ public class SpotifyController : ControllerBase
     [HttpPut("seek")]
     public async Task<IActionResult> SeekPlayback([FromBody] SeekRequest request)
     {
-        var token = User.FindFirstValue("SpotifyToken");
+        var token = User.FindFirst("SpotifyToken")?.Value;
         if (string.IsNullOrEmpty(token))
-            return Unauthorized("❌ You must authenticate first.");
+            return Unauthorized("❌ JWT is missing SpotifyToken claim.");
 
         var spotifyClient = new SpotifyClient(token);
-        await spotifyClient.Player.SeekTo(new PlayerSeekToRequest(request.PositionMs) { DeviceId = request.DeviceId });
+        await spotifyClient.Player.SeekTo(new PlayerSeekToRequest(request.PositionMs)
+        {
+            DeviceId = request.DeviceId
+        });
 
         return Ok(new { message = "✅ Playback position updated." });
     }

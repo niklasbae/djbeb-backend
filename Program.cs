@@ -1,12 +1,12 @@
 using djbeb;
-using Microsoft.Extensions.Options;
-using Microsoft.AspNetCore.DataProtection;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ✅ Bind SpotifyConfig from appsettings.json
-builder.Services.Configure<SpotifyConfig>(
-    builder.Configuration.GetSection("Spotify"));
+// ✅ Bind configurations
+builder.Services.Configure<SpotifyConfig>(builder.Configuration.GetSection("Spotify"));
+builder.Services.Configure<JwtConfig>(builder.Configuration.GetSection("Jwt")); // ✅ Recommended
 
 builder.Services.AddSingleton<SpotifyService>();
 
@@ -14,46 +14,46 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddDistributedMemoryCache();
-
-// ✅ Configure Data Protection to persist keys in production
-if (!builder.Environment.IsDevelopment())
-{
-    builder.Services.AddDataProtection()
-        .PersistKeysToFileSystem(new DirectoryInfo("/var/data/DataProtectionKeys"));
-}
-
-// ✅ Session configuration
-builder.Services.AddSession(options =>
-{
-    options.Cookie.Name = ".DJBeb.Session";
-    options.Cookie.HttpOnly = true;
-    options.Cookie.IsEssential = true;
-    options.IdleTimeout = TimeSpan.FromDays(14);
-});
-
-// ✅ Fetch frontend URL from SpotifyConfig dynamically
+// ✅ Dynamically fetch frontend URL
 var frontendUrl = builder.Configuration.GetSection("Spotify")["FrontendUrl"] ?? "http://localhost:5173";
 
-// ✅ Add CORS policy
+// ✅ CORS setup
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
         policy.WithOrigins(frontendUrl)
-            .AllowCredentials()
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
-builder.Services.AddControllers();
+// ✅ Configure JWT authentication
+var jwtSecret = builder.Configuration["Jwt:Secret"] 
+                ?? throw new InvalidOperationException("JWT Secret is not configured.");
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = "Bearer";
+    options.DefaultChallengeScheme = "Bearer";
+}).AddJwtBearer("Bearer", options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+        ValidateIssuer = false,
+        ValidateAudience = false
+    };
+});
 
 var app = builder.Build();
 
 app.UseCors();
-app.UseCookiePolicy();
-app.UseSession();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
@@ -61,7 +61,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseAuthorization();
 app.MapControllers();
 
 app.Run();

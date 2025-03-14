@@ -1,0 +1,6 @@
+@djbeb_HostAddress = http://localhost:5151
+
+GET {{djbeb_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

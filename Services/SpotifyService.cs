@@ -44,6 +44,24 @@ public class SpotifyService
             )
         );
     }
+    
+    public async Task<AuthorizationCodeRefreshResponse> RefreshAccessToken(string refreshToken)
+    {
+        try
+        {
+            var tokenRequest = new AuthorizationCodeRefreshRequest(
+                _config.ClientId, _config.ClientSecret, refreshToken
+            );
+
+            var response = await new OAuthClient().RequestToken(tokenRequest);
+            return response; // ✅ Correct return type
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error refreshing access token: {ex.Message}");
+            throw;
+        }
+    }
 
     public async Task<string> GetPlaylistTracks(string playlistId, string accessToken)
     {

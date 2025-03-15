@@ -55,6 +55,52 @@ public class SpotifyController : ControllerBase
         var frontendUrl = _spotifyConfig.FrontendUrl;
         return Redirect($"{frontendUrl}?token={jwt}");
     }
+    
+    [HttpPost("refresh")]
+    public async Task<IActionResult> RefreshToken()
+    {
+        var jwt = HttpContext.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+        if (string.IsNullOrEmpty(jwt)) return Unauthorized("No JWT provided");
+
+        var handler = new JwtSecurityTokenHandler();
+        var token = handler.ReadJwtToken(jwt);
+        var refreshToken = token.Claims.FirstOrDefault(c => c.Type == "SpotifyRefreshToken")?.Value;
+
+        if (string.IsNullOrEmpty(refreshToken))
+            return Unauthorized("Refresh token missing");
+
+        var newToken = await _spotifyService.RefreshAccessToken(refreshToken);
+        if (newToken == null)
+            return Unauthorized("Failed to refresh access token");
+
+        var jwtSecret = _jwtConfig.Secret;
+        var key = Encoding.UTF8.GetBytes(jwtSecret!);
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(new[]
+            {
+                new Claim("SpotifyToken", newToken.AccessToken),
+                new Claim("SpotifyRefreshToken", newToken.RefreshToken)
+            }),
+            Expires = DateTime.UtcNow.AddHours(1),
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+        };
+
+        var newJwt = handler.WriteToken(handler.CreateToken(tokenDescriptor));
+
+        return Ok(new { jwtToken = newJwt });
+    }
+
+    private string? GetSpotifyTokenFromJwt()
+    {
+        var jwt = HttpContext.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+        if (string.IsNullOrEmpty(jwt)) return null;
+
+        var handler = new JwtSecurityTokenHandler();
+        var token = handler.ReadJwtToken(jwt);
+        return token.Claims.FirstOrDefault(c => c.Type == "SpotifyToken")?.Value;
+    }
+    
 
     [Authorize]
     [HttpGet("playlists")]
